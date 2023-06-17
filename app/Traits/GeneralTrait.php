@@ -12,7 +12,7 @@ trait GeneralTrait{
             'errNum' => $errNum,
             'msg' => $msg
         ]);
-    }
+    }    
 
     public function returnSuccessMessage($status,$msg,$errNum = "S000"){
         return response()->json([
@@ -32,7 +32,7 @@ trait GeneralTrait{
         ]);
     }
 
-
+ 
     public function returnValidationError($status,$code = "E001", $validator)
     {
         return $this->returnError($status,$code, $validator->errors()->first());

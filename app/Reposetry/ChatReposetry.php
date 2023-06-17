@@ -1,80 +1,42 @@
 <?php
 namespace App\Reposetry;
 
-use App\Models\Chat;
+
 use App\Models\User;
-use GuzzleHttp\Client;
 use App\Traits\GeneralTrait;
 use App\Interface\ChatInterface;
+use App\Traits\ChatFunctionTrait;
 use Illuminate\Support\Facades\Auth;
 use GuzzleHttp\Exception\ConnectException;
 
 
-class ChatReposetry implements ChatInterface{
+class ChatReposetry   implements ChatInterface{
 
-    use GeneralTrait;
+    use GeneralTrait,ChatFunctionTrait;
+
     public function chat($validator){
         try {
 
+            //get the user message
             $userMessage = strtolower($validator->messages);
 
-            $jsonFile = file_get_contents(base_path('assets/json/file.json'));
-            if(!empty($jsonFile)){
-            $json = json_decode($jsonFile,true);
-            foreach ($json as $record) {
+            // start by search in the json file
+            $jsonResponse = $this->searchInJsonFile($userMessage);
 
-                if($record["messages"] == $userMessage ){
-                return $this->returnData(200,'file ',$record["reply"],$userMessage);
-                // return $record["reply"];
-                }
-
-            }
+            // if it find the data return it ;
+            if($jsonResponse != null){
+                return $jsonResponse;
             }
 
-                $client = new Client();
-                $response = $client->post('https://api.openai.com/v1/chat/completions', [
-                    'headers' => [
-                        'Content-Type' => 'application/json',
-                        'Authorization' => 'Bearer ' . env('OPENAI_API_KEY'),
-                    ],
-                    'json' => [
-                        "model" => "gpt-3.5-turbo",
-                        'messages' => [
-                            [
-                                "role" => "user",
-                                "content" => $userMessage
-                            ]
-                        ],
-                        'temperature' => 0.7,   #between 0 - 2
-                        'max_tokens' => 60,
-                        'n' => 1,
-                        'stop' => ['.'],
-                    ],
-                ]);
-                $result = json_decode($response->getBody()->getContents(), true);
-                $data = $result['choices'][0]['message']['content'];
+            // if not find the massage in the file get it by the API
 
-                Chat::create([
-                    'user_msg'=>$userMessage,
-                    'reply'=> $data ,
-                    'user_id'=>Auth::guard('api')->id(),
-                ]);
+            $data = $this->getChatCompletionFromAPI($userMessage);
 
-                $newData[] =[
-                    'messages'=>$userMessage,
-                    'reply'=>$data,
-                ];
+            //  store the data  database and in the json file
+            $this->saveChatRecord($userMessage,$data);
 
-                if(!empty($jsonFile)){
-                    $jdata = json_decode($jsonFile, true);
-                    $jdata = array_merge($jdata, $newData);
-                }else{
-                    $jdata = $newData ;
-                }
-                $json = json_encode($jdata,JSON_PRETTY_PRINT);
-                file_put_contents(base_path('assets/json/file.json'), $json);
-
-                return $this->returnData(200,'chat GPT ',$data,$userMessage);
+            // return API data
+            return $this->returnData(200,'chat GPT ',$data,$userMessage);
 
         }catch (ConnectException $e) {
             $handlerContext = $e->getHandlerContext();
@@ -91,6 +53,8 @@ class ChatReposetry implements ChatInterface{
             return $this->returnError('404','E404',$message);
         }
     }
+
+
 
     public function history(){
         try{
